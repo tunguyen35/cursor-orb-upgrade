@@ -25,6 +25,7 @@ const BackgroundRemover = () => {
   const [hasPreview, setHasPreview] = useState(false);
   const [cursorPos, setCursorPos] = useState({ x: 0, y: 0 });
   const [showCursor, setShowCursor] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -39,30 +40,59 @@ const BackgroundRemover = () => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    setIsLoading(true);
     const reader = new FileReader();
     reader.onload = (event) => {
       const img = new Image();
       img.onload = () => {
+        console.log("Image loaded:", img.width, "x", img.height);
         setImage(img);
-        initializeCanvas(img);
-        toast.success("Ảnh đã được tải lên thành công!");
+        // Use setTimeout to ensure state updates and canvas is ready
+        setTimeout(() => {
+          initializeCanvas(img);
+          setIsLoading(false);
+          toast.success("Ảnh đã được tải lên thành công!");
+        }, 100);
+      };
+      img.onerror = () => {
+        setIsLoading(false);
+        toast.error("Lỗi khi tải ảnh. Vui lòng thử lại!");
       };
       img.src = event.target?.result as string;
+    };
+    reader.onerror = () => {
+      setIsLoading(false);
+      toast.error("Lỗi khi đọc file. Vui lòng thử lại!");
     };
     reader.readAsDataURL(file);
   };
 
   const initializeCanvas = (img: HTMLImageElement) => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas) {
+      console.error("Canvas not found!");
+      return;
+    }
 
+    // Set canvas size
     canvas.width = img.width;
     canvas.height = img.height;
     
+    console.log("Canvas size set to:", canvas.width, "x", canvas.height);
+    
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
-    if (!ctx) return;
+    if (!ctx) {
+      console.error("Could not get canvas context!");
+      return;
+    }
 
+    // Clear canvas first
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Draw image
     ctx.drawImage(img, 0, 0);
+    console.log("Image drawn to canvas");
+    
     saveHistory();
   };
 
@@ -236,25 +266,32 @@ const BackgroundRemover = () => {
 
             <div
               className="relative mb-4 flex min-h-[400px] items-center justify-center overflow-auto rounded-xl border-2 border-border bg-[linear-gradient(45deg,#f0f0f0_25%,transparent_25%),linear-gradient(-45deg,#f0f0f0_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#f0f0f0_75%),linear-gradient(-45deg,transparent_75%,#f0f0f0_75%)] [background-position:0_0,0_10px,10px_-10px,-10px_0px] [background-size:20px_20px]"
-              onMouseEnter={() => setShowCursor(true)}
+              onMouseEnter={() => image && setShowCursor(true)}
               onMouseLeave={() => setShowCursor(false)}
             >
-              {!image ? (
+              {isLoading ? (
+                <div className="text-center text-muted-foreground">
+                  <div className="mb-4 text-6xl animate-pulse">⏳</div>
+                  <h3 className="mb-2 text-xl font-semibold">Đang tải ảnh...</h3>
+                  <p>Vui lòng đợi</p>
+                </div>
+              ) : !image ? (
                 <div className="text-center text-muted-foreground">
                   <div className="mb-4 text-6xl">📂</div>
                   <h3 className="mb-2 text-xl font-semibold">Chưa có ảnh</h3>
                   <p>Nhấn "Chọn Ảnh" ở trên để bắt đầu</p>
                 </div>
               ) : (
-                <canvas
-                  ref={canvasRef}
-                  onMouseDown={startDrawing}
-                  onMouseMove={draw}
-                  onMouseUp={stopDrawing}
-                  onMouseLeave={stopDrawing}
-                  className="cursor-none shadow-lg"
-                  style={{ transform: `scale(${zoom})` }}
-                />
+                <div className="inline-block" style={{ transform: `scale(${zoom})`, transformOrigin: 'center' }}>
+                  <canvas
+                    ref={canvasRef}
+                    onMouseDown={startDrawing}
+                    onMouseMove={draw}
+                    onMouseUp={stopDrawing}
+                    onMouseLeave={stopDrawing}
+                    className="cursor-none shadow-lg block"
+                  />
+                </div>
               )}
             </div>
 
